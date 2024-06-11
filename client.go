@@ -29,8 +29,22 @@ type Message struct {
 	Text     string //текст
 }
 
-func main() {
+// название
+const AsciiTitle string = "\n\t\tYet Another Messanger\n\n" +
+	"\tY88b   d88P      d8888   888b     d888\n" +
+	"\t Y88b d88P      d88888   8888b   d8888\n" +
+	"\t  Y88o88P      d88P888   88888b.d88888\n" +
+	"\t   Y888P      d88P 888   888Y88888P888\n" +
+	"\t    888      d88P  888   888 Y888P 888\n" +
+	"\t    888     d88P   888   888  Y8P  888\n" +
+	"\t    888    d8888888888   888       888\n" +
+	"\t    888   d88P     888   888       888\n"
 
+const Copyright string = "Ilya \"Update56\" Cherdakov  AtlSTU 2024"
+
+func main() {
+	//вывод названия
+	titlePrint()
 	//ввод никнейма
 	fmt.Println("Введите никнейм")
 	var nickname string
@@ -84,7 +98,7 @@ func main() {
 
 	for {
 		//очищаем териминал
-		fmt.Printf("\033[2J")
+		fmt.Printf("\033[1J")
 		//вывод списка пользователей онлайн
 		printList(usersOnline)
 		//установка курсора в самую нижнию строку (строка ввода)
@@ -222,6 +236,8 @@ func getOnlineUsers(conn net.Conn) {
 
 // функция вывода списка онлайна
 func printList(usersOnline []string) {
+	setCursorPosition(0, 0)
+	fmt.Println("Пользователи онлайн")
 	for _, user := range usersOnline {
 		fmt.Println(user)
 	}
@@ -230,6 +246,17 @@ func printList(usersOnline []string) {
 // функция установки курсора на позицию x,y
 func setCursorPosition(x, y int) {
 	fmt.Printf("\033[%d;%dH", y, x)
+}
+
+// выводназвания
+func titlePrint() {
+	xT, yT := consolesize.GetConsoleSize()
+	fmt.Print(AsciiTitle)
+	setCursorPosition(xT-len(Copyright), yT)
+	fmt.Print(Copyright)
+	time.Sleep(time.Second * 3)
+	fmt.Printf("\033[1J")
+	setCursorPosition(0, 0)
 }
 
 //2 решения: 1) топорное: ввод определённого набора символов (например: "###")
