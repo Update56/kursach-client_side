@@ -72,6 +72,8 @@ func main() {
 	}
 	//закрытие в конце выполнения программы
 	defer conn.Close()
+	//нулевое сообщение
+	sendMessage(conn, nickname, serverName, "")
 
 	//создание хэш-таблицы ключ - никнейм отправителя, значение - канал
 	var usersMap = map[string]chan string{
@@ -158,7 +160,7 @@ func procDiaolog(myName string, recName string, buffChan chan string, conn net.C
 		//обрезаем символ перевода строки
 		input = input[:len(input)-1]
 		//отправляем сообщение на сервер
-		sendingMessage(conn, myName, recName, input)
+		sendMessage(conn, myName, recName, input)
 	}
 }
 
@@ -181,7 +183,7 @@ func printMessage(name string, strCount *int, text string) {
 }
 
 // функция отправки сообщений
-func sendingMessage(conn net.Conn, myName string, recName string, text string) {
+func sendMessage(conn net.Conn, myName string, recName string, text string) {
 	//объявляем выходной енкодер с потоком в виде подключения
 	enc := gob.NewEncoder(conn)
 	//передача сообщения о получении списка пользователей (сообщение сделать константой)
@@ -231,7 +233,7 @@ func procSpecialMessages(buffChan chan string, usersOnline *[]string) {
 // функция получения списка пользователей в сети
 func getOnlineUsers(conn net.Conn) {
 	//вызов отправки сообщения со спец.командой
-	sendingMessage(conn, clientName, serverName, "GetOnlineList")
+	sendMessage(conn, clientName, serverName, "GetOnlineList")
 }
 
 // функция вывода списка онлайна
