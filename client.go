@@ -59,14 +59,14 @@ func main() {
 	//закрытие в конце выполнения программы
 	defer conn.Close()
 
-	//создание хэш-таблицы ключ - никнейм, значение - канал
+	//создание хэш-таблицы ключ - никнейм отправителя, значение - канал
 	var usersMap = map[string]chan string{
-		clientName: make(chan string, bufferMessSize), //нулевая запись со спец.именем
+		serverName: make(chan string, bufferMessSize), //нулевая запись со спец.именем сервера
 	}
 	//пустой список пользователей в сети
 	var usersOnline []string
 	//запуск функции обработки служебных сообщений
-	go procSpecialMessages(usersMap[clientName], &usersOnline)
+	go procSpecialMessages(usersMap[serverName], &usersOnline)
 
 	//запуск получения сообщений
 	go receivingMessage(conn, usersMap)
@@ -206,9 +206,9 @@ func procSpecialMessages(buffChan chan string, usersOnline *[]string) {
 		switch text[:3] {
 		//001 - получение списка пользователей
 		case "001":
-			//Отсекаем код операции
+			//Отсекаем код операции и \n
 			text = text[4:]
-			//делим одну строку на слайс
+			//делим строку на слайс с никами юзеров в онлайне
 			*usersOnline = strings.Split(text, "\n")
 		}
 	}
