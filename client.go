@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/i582/cfmt/cmd/cfmt"
 	"github.com/nathan-fiscaletti/consolesize-go"
 )
 
@@ -30,19 +32,30 @@ type Message struct {
 }
 
 // название
-const AsciiTitle string = "\n\t\tYet Another Messanger\n\n" +
-	"\tY88b   d88P      d8888   888b     d888\n" +
-	"\t Y88b d88P      d88888   8888b   d8888\n" +
-	"\t  Y88o88P      d88P888   88888b.d88888\n" +
-	"\t   Y888P      d88P 888   888Y88888P888\n" +
-	"\t    888      d88P  888   888 Y888P 888\n" +
-	"\t    888     d88P   888   888  Y8P  888\n" +
-	"\t    888    d8888888888   888       888\n" +
-	"\t    888   d88P     888   888       888\n"
+const AsciiTitle string = `
+		Yet Another Messanger
 
+	Y88b   d88P      d8888   888b     d888
+	 Y88b d88P      d88888   8888b   d8888
+	  Y88o88P      d88P888   88888b.d88888
+	   Y888P      d88P 888   888Y88888P888 
+	    888      d88P  888   888 Y888P 888
+	    888     d888888888   888  Y8P  888
+	    888    d88P    888   888       888
+	    888    d888    888   888       888`
+
+// автор
 const Copyright string = "Ilya \"Update56\" Cherdakov  AtlSTU 2024"
 
 func main() {
+	//загружаем пару сертификат/ключ
+	cer, err := tls.LoadX509KeyPair("cert/client.crt", "cert/client.key")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	//создаём конфигурацию
+	config := &tls.Config{Certificates: []tls.Certificate{cer}, InsecureSkipVerify: true}
 	//вывод названия
 	titlePrint()
 	//ввод никнейма
@@ -63,8 +76,8 @@ func main() {
 	var ipAddress string
 	fmt.Scan(&ipAddress)
 
-	//установка соединение с сервером по введённому <IP:port>
-	conn, err := net.Dial("tcp", ipAddress)
+	//установка соединение с сервером по введённому <IP:port> с tls
+	conn, err := tls.Dial("tcp", ipAddress, config)
 	//проверка на ошибку при установке
 	if err != nil {
 		fmt.Println(err)
@@ -99,10 +112,9 @@ func main() {
 	}
 
 	for {
-		//очищаем териминал
-		fmt.Printf("\033[1J")
+		clearCons()
 		//вывод списка пользователей онлайн
-		printList(usersOnline)
+		printList(usersOnline, nickname)
 		//установка курсора в самую нижнию строку (строка ввода)
 		_, y := consolesize.GetConsoleSize()
 		setCursorPosition(0, y-1)
@@ -110,10 +122,11 @@ func main() {
 		var user string
 		fmt.Scan(&user)
 
-		//проверка (в отдельную функцию)
+		//проверка
 		if idx := slices.Index(usersOnline, user); idx == -1 || user == nickname {
 			setCursorPosition(0, len(usersOnline)+1)
-			fmt.Printf("Такого пользователя нет!")
+			fmt.Print("\tТакого пользователя нет!")
+			setCursorPosition(consolesize.GetConsoleSize())
 			continue
 		}
 		//проверка на наличие в хэш-таблице
@@ -128,31 +141,48 @@ func main() {
 
 // функция диалога с пользователем
 func procDiaolog(myName string, recName string, buffChan chan string, conn net.Conn) {
+	//очистка консоли
+	clearCons()
+	//очищаем стандартный поток
+	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 	//счётчик строк для правильного отображения сообщений
 	strCount := 1
 	//переменная для ввода строки
 	var input string
-
 	//анонимная функция для вывода сообщения из канала
+
+	for len(buffChan) != 0 {
+		printMessage(recName, &strCount, <-buffChan)
+	}
+
 	go func() {
 		//проверка на символы выхода из диалога
-		for input == "###" {
+		for input != "###" {
 			//проверка на пустоту канала, чтобы поток не блокировался
 			if len(buffChan) == 0 {
 				continue
 			}
+			//вывод сообщения
 			printMessage(recName, &strCount, <-buffChan)
 		}
 	}()
 
 	for {
-		//чтение ввода со стандартного ввода(консолм)
+		_, y := consolesize.GetConsoleSize()
+		setCursorPosition(0, y)
+		cfmt.Print("{{\"###\" - выход из дилога  \"Enter - ввод\"}}::bgWhite|#000000")
+		//установка курсора в нижнию строку (строка ввода)
+		setCursorPosition(0, y-1)
+		//чтение ввода со стандартного ввода(консоли)
 		input, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 		//последовательность для выхода
-		if input[:3] == "###" {
-			time.Sleep(time.Second)
-			return
+		if len(input) >= 3 {
+			if input[:3] == "###" {
+				time.Sleep(time.Second)
+				return
+			}
 		}
+
 		//выводим написанное сообщение
 		printMessage(myName, &strCount, input)
 		//очищаем поле ввода
@@ -192,12 +222,11 @@ func sendMessage(conn net.Conn, myName string, recName string, text string) {
 
 // функция получения сообщений и распределения
 func receivingMessage(conn net.Conn, usersMap map[string]chan string) {
-
-	//объявляем входной декодер с потоком в виде подключения
-	dec := gob.NewDecoder(conn)
-
 	//цикл получения и распределения сообщений
 	for {
+		//объявляем входной декодер с потоком в виде подключения
+		dec := gob.NewDecoder(conn)
+
 		//пустая структура для сообщения
 		recMess := Message{}
 
@@ -237,12 +266,19 @@ func getOnlineUsers(conn net.Conn) {
 }
 
 // функция вывода списка онлайна
-func printList(usersOnline []string) {
+func printList(usersOnline []string, nickname string) {
 	setCursorPosition(0, 0)
 	fmt.Println("Пользователи онлайн")
 	for _, user := range usersOnline {
+		if user == nickname {
+			fmt.Print("(Вы) ")
+		}
 		fmt.Println(user)
+
 	}
+	_, y := consolesize.GetConsoleSize()
+	setCursorPosition(0, y)
+	cfmt.Print("{{Введите имя пользователя чтобы начать диалог}}::bgWhite|#000000")
 }
 
 // функция установки курсора на позицию x,y
@@ -250,15 +286,18 @@ func setCursorPosition(x, y int) {
 	fmt.Printf("\033[%d;%dH", y, x)
 }
 
-// выводназвания
+// вывод названия
 func titlePrint() {
-	xT, yT := consolesize.GetConsoleSize()
-	fmt.Print(AsciiTitle)
-	setCursorPosition(xT-len(Copyright), yT)
+	_, yT := consolesize.GetConsoleSize()
+	fmt.Println(AsciiTitle)
+	setCursorPosition(0, yT-1)
 	fmt.Print(Copyright)
 	time.Sleep(time.Second * 3)
-	fmt.Printf("\033[1J")
+	clearCons()
+}
+func clearCons() {
 	setCursorPosition(0, 0)
+	fmt.Printf("\033[0J")
 }
 
 //2 решения: 1) топорное: ввод определённого набора символов (например: "###")
