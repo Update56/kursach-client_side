@@ -7,4 +7,7 @@ require (
 	github.com/nathan-fiscaletti/consolesize-go v0.0.0-20220204101620-317176b6684d
 )
 
-require github.com/gookit/color v1.3.2 // indirect
+require (
+	github.com/gookit/color v1.3.2 // indirect
+	github.com/mattn/go-sqlite3 v1.14.22 // indirect
+)

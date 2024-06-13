@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"database/sql"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/i582/cfmt/cmd/cfmt"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/nathan-fiscaletti/consolesize-go"
 )
 
@@ -85,6 +87,7 @@ func main() {
 	}
 	//закрытие в конце выполнения программы
 	defer conn.Close()
+
 	//нулевое сообщение
 	sendMessage(conn, nickname, serverName, "")
 
@@ -226,8 +229,14 @@ func sendMessage(conn net.Conn, myName string, recName string, text string) {
 	enc.Encode(Message{myName, recName, text})
 }
 
-// функция получения сообщений и распределения
+// функция получения сообщений, распределения и записи в бд
 func receivingMessage(conn net.Conn, usersMap map[string]chan string) {
+	//открытие бд
+	db, err := sql.Open("sqlite3", "messages.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
 	//цикл получения и распределения сообщений
 	for {
 		//объявляем входной декодер с потоком в виде подключения
@@ -246,6 +255,11 @@ func receivingMessage(conn net.Conn, usersMap map[string]chan string) {
 		}
 		//отправляем сообщение в канал, соотвествующий никнейму отправителя
 		usersMap[recMess.Sender] <- recMess.Text
+		//записываем в базу данных
+		_, err := db.Exec("insert into messages (time, sender, text) values (datetime('now'), $1, $2)", recMess.Sender, recMess.Text)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
