@@ -104,6 +104,7 @@ func main() {
 	for {
 		fmt.Println("В онлайне никого нет...")
 		time.Sleep(time.Second)
+		clearCons()
 		//пока список пуст, пропускаем цикл
 		if len(usersOnline) == 0 {
 			continue
@@ -121,11 +122,17 @@ func main() {
 		//считываем имя пользователя для общения
 		var user string
 		fmt.Scan(&user)
-
+		//проверка на выход
+		if len(user) >= 3 {
+			if user[:3] == "###" {
+				procExit(conn, nickname)
+			}
+		}
 		//проверка
 		if idx := slices.Index(usersOnline, user); idx == -1 || user == nickname {
 			setCursorPosition(0, len(usersOnline)+1)
 			fmt.Print("\tТакого пользователя нет!")
+			time.Sleep(time.Second)
 			setCursorPosition(consolesize.GetConsoleSize())
 			continue
 		}
@@ -205,8 +212,7 @@ func printMessage(name string, strCount *int, text string) {
 	*strCount++
 	//если строки займут весь экран, очистить терминал, кроме строки ввода
 	if _, y := consolesize.GetConsoleSize(); *strCount >= y-2 {
-		setCursorPosition(0, y-1)
-		fmt.Printf("\033[1J")
+		clearCons()
 	}
 	//востанавливаем курсор в строке ввода
 	fmt.Printf("\033[u")
@@ -265,6 +271,12 @@ func getOnlineUsers(conn net.Conn) {
 	sendMessage(conn, clientName, serverName, "GetOnlineList")
 }
 
+// функция выхода
+func procExit(conn net.Conn, nickname string) {
+	sendMessage(conn, nickname, serverName, "Disconnect")
+	os.Exit(1)
+}
+
 // функция вывода списка онлайна
 func printList(usersOnline []string, nickname string) {
 	setCursorPosition(0, 0)
@@ -278,7 +290,7 @@ func printList(usersOnline []string, nickname string) {
 	}
 	_, y := consolesize.GetConsoleSize()
 	setCursorPosition(0, y)
-	cfmt.Print("{{Введите имя пользователя чтобы начать диалог}}::bgWhite|#000000")
+	cfmt.Printf("{{Введите никнейм чтобы начать диалог  \"###\" - выход}}::bgWhite|#000000")
 }
 
 // функция установки курсора на позицию x,y
@@ -295,10 +307,9 @@ func titlePrint() {
 	time.Sleep(time.Second * 3)
 	clearCons()
 }
+
+// очистка консоли
 func clearCons() {
 	setCursorPosition(0, 0)
 	fmt.Printf("\033[0J")
 }
-
-//2 решения: 1) топорное: ввод определённого набора символов (например: "###")
-//2) через UNIX-сигналы: при нажатии сочетания клавиш ctrl+c (^C) будет произведён выход из диалога в главное меню
